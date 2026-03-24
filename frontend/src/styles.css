@@ -1,0 +1,19 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #103a4f;
+  background: #e9f8ff;
+}
+body { margin: 0; }
+.container { max-width: 920px; margin: 0 auto; padding: 16px; }
+.card { background: white; border-radius: 18px; padding: 18px; box-shadow: 0 8px 25px rgba(18,91,126,0.15); }
+.btn { background: #00a7d6; color: white; border: 0; padding: 10px 14px; border-radius: 10px; cursor: pointer; display: inline-block; text-decoration:none; }
+.btn.secondary { background: #8acde2; color:#083247; }
+.grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; }
+label { display:flex; flex-direction: column; gap: 6px; font-weight: 600; }
+input, select { border: 1px solid #bfdce7; padding:8px; border-radius:8px; }
+.ruleRow { display:grid; grid-template-columns: 1fr 150px 150px; gap:10px; margin-bottom:10px; }
+.mini { margin-left: 10px; border: 0; background:#14b76e; color:white; border-radius:8px; padding:6px 8px; }
+.fullmatch { background: #d4ffe5; transition: background .2s; }
+@media (max-width: 640px) {
+  .ruleRow { grid-template-columns: 1fr; }
+}
