@@ -32,7 +32,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "5173:5173"
+      - "${PUBLIC_FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./frontend/src:/app/src
 
