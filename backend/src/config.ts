@@ -9,5 +9,6 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://postgres:postgres@db:5432/salejuntada',
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:4000/auth/google/callback'
+  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:4000/auth/google/callback',
+  openaiApiKey: process.env.OPENAI_API_KEY ?? ''
 };

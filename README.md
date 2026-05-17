@@ -4,25 +4,24 @@ App web para coordinar una fecha grupal en español argentino.
 
 ## Qué resuelve
 
-- Host crea una juntada con duración y rango de fechas.
-- Se genera un link para compartir.
-- Cada buddy (incluyendo host) entra con Google y carga disponibilidad en franjas que aplican a días de semana.
-- El host ve notificaciones en vivo con cada respuesta.
-- Las opciones muestran intersección de horarios entre quienes ya respondieron.
-- Si existe match total y alcanzó la cantidad esperada de respuestas, se dispara aviso especial (confetti + fondo verde).
-- El host elige fecha final y se notifica en vivo.
+- Host entra con Google y crea una conversación para coordinar una juntada.
+- Se genera un link para compartir con invitados autenticados con Google.
+- Todos conversan con un organizador virtual basado en ChatGPT.
+- El organizador solo consulta disponibilidad/preferencias del próximo mes y propone días/horarios posibles.
+- Si detecta un horario viable para todos los participantes mencionados, lo celebra en la conversación.
+- El backend restringe el uso: usuarios no autenticados no llaman a OpenAI y cada usuario puede enviar como máximo 1 request por segundo al organizador.
 
 ## Stack
 
 - Frontend: React + Vite + Socket.IO client
 - Backend: Node.js + Express + Passport Google OAuth + Socket.IO
-- Storage: PostgreSQL
+- Persistencia: PostgreSQL para sesiones, participantes y mensajes.
 - Infra: Docker Compose
-- Arquitectura de persistencia: interfaz de storage (`IJuntadaStorage`) + implementación PostgreSQL con inyección de dependencia en `JuntadaService`.
+- Modelo OpenAI fijo: `gpt-5.4-mini`.
 
 ## Ejecutar
 
-1. Copiar `.env.example` a `.env` y completar credenciales Google.
+1. Copiar `.env.example` a `.env` y completar credenciales Google y `OPENAI_API_KEY`.
 2. Levantar:
 
 ```bash

@@ -1,188 +1,268 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Link, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { api, authUrl, logoutUrl } from './api/client';
-import { buildRangesFromRules, Rule } from './utils/availability';
+import { ApiError, api, authUrl, buildAuthUrl, logoutUrl } from './api/client';
 import './styles.css';
 
 type MeResponse = { user: { googleId: string; displayName: string } | null };
 
+type ChatMessage = {
+  id: string;
+  sessionId: string;
+  role: 'user' | 'assistant';
+  authorGoogleId: string | null;
+  authorName: string;
+  content: string;
+  createdAt: string;
+};
+
+type SessionState = {
+  session: {
+    id: string;
+    hostGoogleId: string;
+    hostName: string;
+    status: 'open' | 'closed';
+  };
+  participants: Array<{ googleId: string; name: string }>;
+  messages: ChatMessage[];
+  me: { googleId: string; name: string } | null;
+  isHost: boolean;
+};
+
 function App() {
   return (
     <BrowserRouter>
-      <div className="container">
-        <HomeOrJuntada />
-      </div>
+      <HomeOrJuntada />
     </BrowserRouter>
   );
 }
 
 function HomeOrJuntada() {
   const params = window.location.pathname.match(/^\/j\/(.+)$/);
-  if (params) {
-    return <JuntadaPage juntadaId={params[1]} />;
-  }
+  if (params) return <ChatPage sessionId={params[1]} />;
   return <HomePage />;
 }
 
 function HomePage() {
   const [me, setMe] = useState<MeResponse['user']>(null);
-  const [durationHours, setDurationHours] = useState(2);
-  const [expectedParticipants, setExpectedParticipants] = useState(5);
-  const [dateFrom, setDateFrom] = useState('2026-04-01T00:00');
-  const [dateTo, setDateTo] = useState('2026-04-14T23:30');
+  const [loading, setLoading] = useState(true);
   const [link, setLink] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api<MeResponse>('/me').then((data) => setMe(data.user)).catch(() => setMe(null));
+    api<MeResponse>('/me')
+      .then((data) => setMe(data.user))
+      .catch(() => setMe(null))
+      .finally(() => setLoading(false));
   }, []);
 
-  async function createJuntada() {
-    const payload = {
-      durationHours,
-      expectedParticipants,
-      dateFrom: new Date(dateFrom).toISOString(),
-      dateTo: new Date(dateTo).toISOString()
-    };
-    const result = await api<{ link: string }>('/juntadas', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    setLink(result.link);
+  async function createSession() {
+    setError('');
+    try {
+      const result = await api<{ link: string }>('/sessions', { method: 'POST' });
+      setLink(result.link);
+      window.location.href = result.link;
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'No se pudo crear la juntada.');
+    }
   }
 
+  if (loading) return <main className="pageShell"><section className="panel">Cargando…</section></main>;
+
   return (
-    <section className="card">
-      <h1>SaleJuntada 🇦🇷</h1>
-      <p>Coordiná fecha con tus buddies sin vueltas.</p>
-      {!me ? (
-        <a className="btn" href={authUrl}>Entrar con Google</a>
-      ) : (
-        <>
-          <p>Hola, <strong>{me.displayName}</strong>.</p>
-          <div className="grid">
-            <label>Duración (horas)
-              <input type="number" value={durationHours} min={1} onChange={(e) => setDurationHours(Number(e.target.value))} />
-            </label>
-            <label>Cantidad esperada
-              <input type="number" value={expectedParticipants} min={1} onChange={(e) => setExpectedParticipants(Number(e.target.value))} />
-            </label>
-            <label>Desde
-              <input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-            </label>
-            <label>Hasta
-              <input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-            </label>
+    <main className="pageShell">
+      <section className="panel homePanel">
+        <div>
+          <p className="eyebrow">SaleJuntada</p>
+          <h1>Organizador virtual de juntadas</h1>
+          <p className="lede">Creá una conversación y compartí el link para coordinar disponibilidad con ayuda de ChatGPT.</p>
+        </div>
+
+        {!me ? (
+          <a className="btn" href={authUrl}>Entrar con Google</a>
+        ) : (
+          <div className="homeActions">
+            <p>Hola, <strong>{me.displayName}</strong>.</p>
+            <button className="btn" onClick={createSession}>Crear conversación</button>
+            {link && (
+              <p className="shareLink">
+                Link para compartir: <a href={link}>{link}</a>
+              </p>
+            )}
+            {error && <p className="errorText">{error}</p>}
+            <button className="btn secondary" onClick={() => fetch(logoutUrl, { method: 'POST', credentials: 'include' }).then(() => location.reload())}>Salir</button>
           </div>
-          <button className="btn" onClick={createJuntada}>Crear juntada</button>
-          {link && <p>Link para compartir: <a href={link}>{link}</a></p>}
-          <button className="btn secondary" onClick={() => fetch(logoutUrl, { method: 'POST', credentials: 'include' }).then(() => location.reload())}>Salir</button>
-        </>
-      )}
-    </section>
+        )}
+      </section>
+    </main>
   );
 }
 
-function JuntadaPage({ juntadaId }: { juntadaId: string }) {
-  const [state, setState] = useState<any>(null);
-  const [options, setOptions] = useState<any>({ options: [], respondedCount: 0, fullMatch: false });
-  const [messages, setMessages] = useState<string[]>([]);
-  const [rules, setRules] = useState<Rule[]>([{ weekDays: [2], startTime: '19:00', endTime: '22:30' }]);
+function ChatPage({ sessionId }: { sessionId: string }) {
+  const [state, setState] = useState<SessionState | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [content, setContent] = useState('');
+  const [authState, setAuthState] = useState<'checking' | 'ready' | 'redirecting'>('checking');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    api('/juntadas/' + juntadaId + '/join', { method: 'POST' }).then(() => refresh());
-    const socket = io(import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:4000', { withCredentials: true });
-    socket.emit('join_juntada_room', juntadaId);
-    socket.on('participant_response', (payload: any) => setMessages((m) => [`Respondió ${payload.participantName}`, ...m]));
-    socket.on('options_updated', (payload: any) => setOptions(payload));
-    socket.on('full_match', (payload: any) => {
-      setOptions(payload);
-      confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 } });
-      setMessages((m) => ['🎉 ¡Match total! Ya hay horarios para todos.', ...m]);
-      document.body.classList.add('fullmatch');
-      setTimeout(() => document.body.classList.remove('fullmatch'), 3500);
-    });
-    socket.on('finalized', (payload: any) => setMessages((m) => [`✅ Fecha elegida: ${new Date(payload.chosenStart).toLocaleString('es-AR')}`, ...m]));
-    return () => socket.disconnect();
-  }, [juntadaId]);
+  const participantsLabel = useMemo(() => {
+    if (!state) return '';
+    return state.participants.map((participant) => participant.name).join(', ');
+  }, [state]);
+
+  function redirectToLogin() {
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.location.href = buildAuthUrl(returnTo);
+  }
+
+  function handleApiError(nextError: unknown) {
+    if (nextError instanceof ApiError && nextError.status === 401) {
+      setAuthState('redirecting');
+      redirectToLogin();
+      return true;
+    }
+    return false;
+  }
 
   async function refresh() {
-    const s = await api<any>('/juntadas/' + juntadaId);
-    setState(s);
-    const o = await api<any>('/juntadas/' + juntadaId + '/options');
-    setOptions(o);
+    const nextState = await api<SessionState>('/sessions/' + sessionId);
+    setState(nextState);
+    setMessages(nextState.messages);
   }
 
   useEffect(() => {
-    refresh();
-  }, [juntadaId]);
+    let cancelled = false;
 
-  const rangePreview = useMemo(() => {
-    if (!state) return 0;
-    return buildRangesFromRules(state.juntada.dateFrom, state.juntada.dateTo, rules).length;
-  }, [rules, state]);
+    async function bootstrap() {
+      try {
+        const me = await api<MeResponse>('/me');
+        if (cancelled) return;
+        if (!me.user) {
+          setAuthState('redirecting');
+          redirectToLogin();
+          return;
+        }
 
-  async function submitAvailability() {
-    if (!state) return;
-    const ranges = buildRangesFromRules(state.juntada.dateFrom, state.juntada.dateTo, rules);
-    await api('/juntadas/' + juntadaId + '/availability', {
-      method: 'POST',
-      body: JSON.stringify({ ranges })
+        setAuthState('ready');
+        await refresh();
+      } catch (nextError) {
+        if (!cancelled && !handleApiError(nextError)) {
+          setError(nextError instanceof Error ? nextError.message : 'No se pudo cargar la conversación.');
+        }
+      }
+    }
+
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (authState !== 'ready') return;
+
+    const socket = io(import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:4000', { withCredentials: true });
+    socket.emit('join_session_room', sessionId);
+    socket.on('message_created', (message: ChatMessage) => {
+      setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
+      if (message.role === 'assistant' && message.content.includes('¡Tenemos juntada!')) {
+        confetti({ particleCount: 140, spread: 90, origin: { y: 0.7 } });
+      }
     });
-    await refresh();
+    return () => {
+      socket.disconnect();
+    };
+  }, [authState, sessionId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, sending]);
+
+  async function sendMessage(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = content.trim();
+    if (!trimmed || sending) return;
+
+    setSending(true);
+    setError('');
+    setContent('');
+    try {
+      const result = await api<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>('/sessions/' + sessionId + '/messages', {
+        method: 'POST',
+        body: JSON.stringify({ content: trimmed })
+      });
+      setMessages((current) => mergeMessages(current, [result.userMessage, result.assistantMessage]));
+    } catch (nextError) {
+      setContent(trimmed);
+      if (!handleApiError(nextError)) {
+        setError(nextError instanceof Error ? nextError.message : 'No se pudo enviar el mensaje.');
+      }
+    } finally {
+      setSending(false);
+    }
   }
 
-  async function finalize(startAt: string) {
-    await api('/juntadas/' + juntadaId + '/finalize', {
-      method: 'POST',
-      body: JSON.stringify({ chosenStart: startAt })
-    });
-    await refresh();
+  if (authState === 'redirecting') {
+    return <main className="pageShell"><section className="panel">Redirigiendo al login…</section></main>;
   }
 
-  if (!state) return <p>Cargando...</p>;
+  if (!state && !error) {
+    return <main className="pageShell"><section className="panel">Cargando conversación…</section></main>;
+  }
 
   return (
-    <section className="card">
-      <h2>Juntada de {state.juntada.hostName}</h2>
-      <p>Duración: {state.juntada.durationMinutes / 60} h · Esperados: {state.juntada.expectedParticipants} · Respondieron: {options.respondedCount}</p>
-      <h3>Tu disponibilidad</h3>
-      {rules.map((rule, idx) => (
-        <div key={idx} className="ruleRow">
-          <select multiple value={rule.weekDays.map(String)} onChange={(e) => {
-            const vals = Array.from(e.target.selectedOptions).map((x) => Number(x.value));
-            setRules((prev) => prev.map((r, i) => i === idx ? { ...r, weekDays: vals } : r));
-          }}>
-            {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((label, i) => <option value={i} key={i}>{label}</option>)}
-          </select>
-          <input type="time" step={1800} value={rule.startTime} onChange={(e) => setRules((prev) => prev.map((r, i) => i === idx ? { ...r, startTime: e.target.value } : r))} />
-          <input type="time" step={1800} value={rule.endTime} onChange={(e) => setRules((prev) => prev.map((r, i) => i === idx ? { ...r, endTime: e.target.value } : r))} />
+    <main className="chatShell">
+      <section className="chatWindow">
+        <header className="chatHeader">
+          <div>
+            <p className="eyebrow">Juntada de {state?.session.hostName ?? 'SaleJuntada'}</p>
+            <h1>Organizador virtual</h1>
+            <p className="lede">{participantsLabel || 'Todavía no hay invitados conectados.'}</p>
+          </div>
+          <button className="btn secondary" onClick={() => fetch(logoutUrl, { method: 'POST', credentials: 'include' }).then(() => location.reload())}>Salir</button>
+        </header>
+
+        <div className="messageStream">
+          {messages.map((message) => (
+            <article
+              key={message.id}
+              className={message.role === 'assistant' ? 'messageBubble assistant' : 'messageBubble user'}
+            >
+              <div className="messageMeta">
+                <strong>{message.authorName}</strong>
+                <span>{new Date(message.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <p>{message.content}</p>
+            </article>
+          ))}
+          {sending && <article className="messageBubble assistant pending">El organizador está pensando…</article>}
+          <div ref={bottomRef} />
         </div>
-      ))}
-      <button className="btn secondary" onClick={() => setRules((prev) => [...prev, { weekDays: [4], startTime: '19:00', endTime: '22:30' }])}>+ Agregar franja</button>
-      <p>Se van a cargar {rangePreview} bloques concretos dentro del rango de fechas.</p>
-      <button className="btn" onClick={submitAvailability}>Guardar disponibilidad</button>
 
-      <h3>Opciones que matchean para quienes respondieron</h3>
-      <ul>
-        {options.options.slice(0, 20).map((option: any) => (
-          <li key={option.startAt}>
-            {new Date(option.startAt).toLocaleString('es-AR')} - {new Date(option.endAt).toLocaleTimeString('es-AR')}
-            {state.isHost && state.juntada.status === 'open' && <button className="mini" onClick={() => finalize(option.startAt)}>Elegir</button>}
-          </li>
-        ))}
-      </ul>
+        {error && <p className="errorText">{error}</p>}
 
-      {state.isHost && (
-        <>
-          <h3>Notificaciones en vivo</h3>
-          <ul>{messages.map((message, i) => <li key={i}>{message}</li>)}</ul>
-        </>
-      )}
-    </section>
+        <form className="composer" onSubmit={sendMessage}>
+          <textarea
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Contale tu disponibilidad o pedile que busque opciones."
+            rows={2}
+          />
+          <button className="btn" disabled={sending || !content.trim()}>Enviar</button>
+        </form>
+      </section>
+    </main>
   );
+}
+
+function mergeMessages(current: ChatMessage[], next: ChatMessage[]) {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of next) byId.set(message.id, message);
+  return Array.from(byId.values()).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
 createRoot(document.getElementById('root')!).render(<App />);

@@ -1,0 +1,10 @@
+.env
+node_modules/
+dist/
+*.tsbuildinfo
+
+backend/node_modules/
+backend/dist/
+
+frontend/node_modules/
+frontend/dist/

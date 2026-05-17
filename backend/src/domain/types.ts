@@ -4,39 +4,34 @@ export type User = {
   email?: string;
 };
 
-export type Juntada = {
+export type ChatSession = {
   id: string;
   hostGoogleId: string;
   hostName: string;
-  durationMinutes: number;
-  expectedParticipants: number;
-  dateFrom: string;
-  dateTo: string;
   status: 'open' | 'closed';
-  chosenStart: string | null;
   createdAt: string;
 };
 
-export type Participant = {
+export type ChatParticipant = {
   id: string;
-  juntadaId: string;
+  sessionId: string;
   googleId: string;
   name: string;
-  responded: boolean;
-  lastResponseAt: string | null;
+  joinedAt: string;
 };
 
-export type AvailabilityRange = {
-  startAt: string;
-  endAt: string;
+export type ChatMessage = {
+  id: string;
+  sessionId: string;
+  role: 'user' | 'assistant';
+  authorGoogleId: string | null;
+  authorName: string;
+  content: string;
+  createdAt: string;
 };
 
-export type CandidateOption = {
-  startAt: string;
-  endAt: string;
-};
-
-export type JuntadaWithParticipants = {
-  juntada: Juntada;
-  participants: Participant[];
+export type ChatSessionState = {
+  session: ChatSession;
+  participants: ChatParticipant[];
+  messages: ChatMessage[];
 };

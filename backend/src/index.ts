@@ -6,42 +6,46 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { config } from './config.js';
 import { configurePassport } from './auth.js';
-import { PostgresJuntadaStorage } from './storage/PostgresJuntadaStorage.js';
-import { JuntadaService } from './services/JuntadaService.js';
+import { ChatService } from './services/ChatService.js';
 import { buildRoutes } from './routes.js';
 import { pool } from './db/pool.js';
 
+function sanitizeReturnTo(value: unknown) {
+  if (typeof value !== 'string') return '/';
+  return value.startsWith('/') ? value : '/';
+}
+
 async function initDb() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS juntadas (
+    CREATE TABLE IF NOT EXISTS chat_sessions (
       id UUID PRIMARY KEY,
       host_google_id TEXT NOT NULL,
       host_name TEXT NOT NULL,
-      duration_minutes INTEGER NOT NULL,
-      expected_participants INTEGER NOT NULL,
-      date_from TIMESTAMPTZ NOT NULL,
-      date_to TIMESTAMPTZ NOT NULL,
       status TEXT NOT NULL DEFAULT 'open',
-      chosen_start TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    CREATE TABLE IF NOT EXISTS participants (
+    CREATE TABLE IF NOT EXISTS chat_participants (
       id UUID PRIMARY KEY,
-      juntada_id UUID NOT NULL REFERENCES juntadas(id) ON DELETE CASCADE,
+      session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
       google_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      responded BOOLEAN NOT NULL DEFAULT FALSE,
-      last_response_at TIMESTAMPTZ,
-      UNIQUE(juntada_id, google_id)
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(session_id, google_id)
     );
 
-    CREATE TABLE IF NOT EXISTS availabilities (
+    CREATE TABLE IF NOT EXISTS chat_messages (
       id UUID PRIMARY KEY,
-      participant_id UUID NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
-      start_at TIMESTAMPTZ NOT NULL,
-      end_at TIMESTAMPTZ NOT NULL
+      session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+      author_google_id TEXT,
+      author_name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE INDEX IF NOT EXISTS chat_messages_session_created_idx
+      ON chat_messages(session_id, created_at);
   `);
 }
 
@@ -73,12 +77,17 @@ async function bootstrap() {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+  app.get('/auth/google', (req, res, next) => {
+    (req.session as any).returnTo = sanitizeReturnTo(req.query.returnTo);
+    next();
+  }, passport.authenticate('google', { scope: ['profile', 'email'] }));
   app.get(
     '/auth/google/callback',
     passport.authenticate('google', { failureRedirect: `${config.frontendUrl}/?login=error` }),
-    (_req, res) => {
-      res.redirect(config.frontendUrl);
+    (req, res) => {
+      const returnTo = sanitizeReturnTo((req.session as any).returnTo);
+      delete (req.session as any).returnTo;
+      res.redirect(`${config.frontendUrl}${returnTo}`);
     }
   );
   app.post('/auth/logout', (req, res, next) => {
@@ -89,16 +98,16 @@ async function bootstrap() {
   });
 
   io.on('connection', (socket) => {
-    socket.on('join_juntada_room', (juntadaId: string) => {
-      socket.join(`juntada:${juntadaId}`);
+    socket.on('join_session_room', (sessionId: string) => {
+      socket.join(`session:${sessionId}`);
     });
   });
 
-  const service = new JuntadaService(new PostgresJuntadaStorage());
+  const service = new ChatService();
   app.use(
     '/api',
     buildRoutes(service, (event) => {
-      io.to(`juntada:${event.juntadaId}`).emit(event.type, event.payload);
+      io.to(`session:${event.sessionId}`).emit(event.type, event.payload);
     })
   );
 

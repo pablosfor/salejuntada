@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { JuntadaService } from './services/JuntadaService.js';
+import { User } from './domain/types.js';
+import { ChatService } from './services/ChatService.js';
 
 function requireAuth(req: any, res: any, next: any) {
   if (!req.user) {
@@ -9,7 +10,20 @@ function requireAuth(req: any, res: any, next: any) {
   next();
 }
 
-export function buildRoutes(service: JuntadaService, notify: (event: { juntadaId: string; type: string; payload?: unknown }) => void) {
+const lastApiRequestByUser = new Map<string, number>();
+
+function enforceApiRateLimit(req: any, res: any, next: any) {
+  const now = Date.now();
+  const googleId = req.user?.googleId;
+  const lastRequestAt = lastApiRequestByUser.get(googleId) ?? 0;
+  if (now - lastRequestAt < 1000) {
+    return res.status(429).json({ error: 'Máximo 1 consulta al organizador por segundo.' });
+  }
+  lastApiRequestByUser.set(googleId, now);
+  next();
+}
+
+export function buildRoutes(service: ChatService, notify: (event: { sessionId: string; type: string; payload?: unknown }) => void) {
   const router = Router();
 
   router.get('/health', (_req, res) => res.json({ ok: true }));
@@ -18,66 +32,33 @@ export function buildRoutes(service: JuntadaService, notify: (event: { juntadaId
     res.json({ user: req.user ?? null });
   });
 
-  router.post('/juntadas', requireAuth, async (req, res) => {
-    const schema = z.object({
-      durationHours: z.number().min(1).max(24),
-      expectedParticipants: z.number().min(1).max(500),
-      dateFrom: z.string().datetime(),
-      dateTo: z.string().datetime()
-    });
-    const payload = schema.parse(req.body);
-    const juntada = await service.createJuntada({
-      user: req.user,
-      ...payload
-    });
-    await service.joinJuntada(juntada.id, req.user);
-    res.json({ juntada, link: `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/j/${juntada.id}` });
+  router.post('/sessions', requireAuth, async (req, res) => {
+    const user = req.user as User;
+    const session = await service.createSession(user);
+    res.json({ session, link: `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/j/${session.id}` });
   });
 
-  router.get('/juntadas/:id', requireAuth, async (req, res) => {
-    const state = await service.getJuntadaState(req.params.id);
+  router.get('/sessions/:id', requireAuth, async (req, res) => {
+    const user = req.user as User;
+    await service.joinSession(req.params.id, user);
+    const state = await service.getState(req.params.id);
     if (!state) return res.status(404).json({ error: 'No existe esa juntada.' });
-    const me = state.participants.find((participant) => participant.googleId === req.user.googleId) ?? null;
-    res.json({ ...state, me, isHost: state.juntada.hostGoogleId === req.user.googleId });
+    const me = state.participants.find((participant) => participant.googleId === user.googleId) ?? null;
+    res.json({ ...state, me, isHost: state.session.hostGoogleId === user.googleId });
   });
 
-  router.post('/juntadas/:id/join', requireAuth, async (req, res) => {
-    const participant = await service.joinJuntada(req.params.id, req.user);
-    res.json({ participant });
-  });
-
-  router.post('/juntadas/:id/availability', requireAuth, async (req, res) => {
+  router.post('/sessions/:id/messages', requireAuth, enforceApiRateLimit, async (req, res) => {
+    const user = req.user as User;
     const schema = z.object({
-      ranges: z.array(z.object({ startAt: z.string().datetime(), endAt: z.string().datetime() }))
+      content: z.string().trim().min(1).max(2000)
     });
-    const payload = schema.parse(req.body);
-    const participant = await service.submitAvailability(req.params.id, req.user, payload.ranges);
-    const options = await service.getCandidateOptions(req.params.id);
+    const { content } = schema.parse(req.body);
+    const result = await service.sendUserMessage(req.params.id, user, content);
 
-    notify({
-      juntadaId: req.params.id,
-      type: 'participant_response',
-      payload: { participantName: participant.name }
-    });
-    notify({ juntadaId: req.params.id, type: 'options_updated', payload: options });
-    if (options.fullMatch) {
-      notify({ juntadaId: req.params.id, type: 'full_match', payload: options });
-    }
+    notify({ sessionId: req.params.id, type: 'message_created', payload: result.userMessage });
+    notify({ sessionId: req.params.id, type: 'message_created', payload: result.assistantMessage });
 
-    res.json({ ok: true, participant, options });
-  });
-
-  router.get('/juntadas/:id/options', requireAuth, async (req, res) => {
-    const options = await service.getCandidateOptions(req.params.id);
-    res.json(options);
-  });
-
-  router.post('/juntadas/:id/finalize', requireAuth, async (req, res) => {
-    const schema = z.object({ chosenStart: z.string().datetime() });
-    const payload = schema.parse(req.body);
-    await service.chooseFinalDate(req.params.id, req.user.googleId, payload.chosenStart);
-    notify({ juntadaId: req.params.id, type: 'finalized', payload });
-    res.json({ ok: true });
+    res.json(result);
   });
 
   return router;
