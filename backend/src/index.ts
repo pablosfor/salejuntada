@@ -78,14 +78,18 @@ async function bootstrap() {
   app.use(passport.session());
 
   app.get('/auth/google', (req, res, next) => {
-    (req.session as any).returnTo = sanitizeReturnTo(req.query.returnTo);
-    next();
-  }, passport.authenticate('google', { scope: ['profile', 'email'] }));
+    const returnTo = sanitizeReturnTo(req.query.returnTo);
+    (req.session as any).returnTo = returnTo;
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      state: returnTo
+    })(req, res, next);
+  });
   app.get(
     '/auth/google/callback',
     passport.authenticate('google', { failureRedirect: `${config.frontendUrl}/?login=error` }),
     (req, res) => {
-      const returnTo = sanitizeReturnTo((req.session as any).returnTo);
+      const returnTo = sanitizeReturnTo((req.session as any).returnTo ?? req.query.state);
       delete (req.session as any).returnTo;
       res.redirect(`${config.frontendUrl}${returnTo}`);
     }
