@@ -165,7 +165,7 @@ function ChatPage({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (authState !== 'ready') return;
 
-    const socket = io(import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:4000', { withCredentials: true });
+    const socket = io(import.meta.env.VITE_BACKEND_URL || undefined, { withCredentials: true });
     socket.emit('join_session_room', sessionId);
     socket.on('message_created', (message: ChatMessage) => {
       setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);

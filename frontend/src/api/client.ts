@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
@@ -21,9 +21,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function buildAuthUrl(returnTo = '/') {
-  const baseUrl = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:4000';
+  const baseUrl = import.meta.env.VITE_BACKEND_URL ?? '';
   return `${baseUrl}/auth/google?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export const authUrl = buildAuthUrl('/');
-export const logoutUrl = `${import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:4000'}/auth/logout`;
+export const logoutUrl = `${import.meta.env.VITE_BACKEND_URL ?? ''}/auth/logout`;
