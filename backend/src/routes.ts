@@ -57,6 +57,7 @@ export function buildRoutes(service: ChatService, notify: (event: { sessionId: s
 
     notify({ sessionId: req.params.id, type: 'message_created', payload: result.userMessage });
     notify({ sessionId: req.params.id, type: 'message_created', payload: result.assistantMessage });
+    notify({ sessionId: req.params.id, type: 'availability_context_updated', payload: result.availabilityContext });
 
     res.json(result);
   });

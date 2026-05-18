@@ -30,8 +30,32 @@ export type ChatMessage = {
   createdAt: string;
 };
 
+export type AvailabilityStatus = 'unknown' | 'declined' | 'no_match' | 'matched';
+
+export type ParticipantAvailability = {
+  googleId: string;
+  name: string;
+  status: AvailabilityStatus;
+  summary: string;
+  candidateSummary: string | null;
+  updatedAt: string | null;
+};
+
+export type AvailabilityCandidate = {
+  startAt: string | null;
+  endAt: string | null;
+  summary: string;
+};
+
+export type AvailabilityContext = {
+  participants: Record<string, ParticipantAvailability>;
+  candidate: AvailabilityCandidate | null;
+  updatedAt: string | null;
+};
+
 export type ChatSessionState = {
   session: ChatSession;
   participants: ChatParticipant[];
   messages: ChatMessage[];
+  availabilityContext: AvailabilityContext;
 };

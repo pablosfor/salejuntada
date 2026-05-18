@@ -18,6 +18,29 @@ type ChatMessage = {
   createdAt: string;
 };
 
+type AvailabilityStatus = 'unknown' | 'declined' | 'no_match' | 'matched';
+
+type ParticipantAvailability = {
+  googleId: string;
+  name: string;
+  status: AvailabilityStatus;
+  summary: string;
+  candidateSummary: string | null;
+  updatedAt: string | null;
+};
+
+type AvailabilityCandidate = {
+  startAt: string | null;
+  endAt: string | null;
+  summary: string;
+};
+
+type AvailabilityContext = {
+  participants: Record<string, ParticipantAvailability>;
+  candidate: AvailabilityCandidate | null;
+  updatedAt: string | null;
+};
+
 type SessionState = {
   session: {
     id: string;
@@ -27,6 +50,7 @@ type SessionState = {
   };
   participants: Array<{ googleId: string; name: string }>;
   messages: ChatMessage[];
+  availabilityContext: AvailabilityContext;
   me: { googleId: string; name: string } | null;
   isHost: boolean;
 };
@@ -109,10 +133,29 @@ function ChatPage({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const participantsLabel = useMemo(() => {
-    if (!state) return '';
-    return state.participants.map((participant) => participant.name).join(', ');
+  const availabilityItems = useMemo(() => {
+    if (!state) return [];
+    const byGoogleId = new Map<string, ParticipantAvailability>();
+    for (const item of Object.values(state.availabilityContext.participants)) {
+      byGoogleId.set(item.googleId, item);
+    }
+    for (const participant of state.participants) {
+      if (!byGoogleId.has(participant.googleId)) {
+        byGoogleId.set(participant.googleId, {
+      googleId: participant.googleId,
+      name: participant.name,
+      status: 'unknown' as const,
+      summary: '',
+      candidateSummary: null,
+      updatedAt: null
+        });
+      }
+    }
+    return Array.from(byGoogleId.values());
   }, [state]);
+  const participantsLabel = useMemo(() => {
+    return availabilityItems.map((participant) => participant.name).join(', ');
+  }, [availabilityItems]);
 
   function redirectToLogin() {
     const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -173,6 +216,9 @@ function ChatPage({ sessionId }: { sessionId: string }) {
         confetti({ particleCount: 140, spread: 90, origin: { y: 0.7 } });
       }
     });
+    socket.on('availability_context_updated', (availabilityContext: AvailabilityContext) => {
+      setState((current) => current ? { ...current, availabilityContext } : current);
+    });
     return () => {
       socket.disconnect();
     };
@@ -191,11 +237,12 @@ function ChatPage({ sessionId }: { sessionId: string }) {
     setError('');
     setContent('');
     try {
-      const result = await api<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>('/sessions/' + sessionId + '/messages', {
+      const result = await api<{ userMessage: ChatMessage; assistantMessage: ChatMessage; availabilityContext: AvailabilityContext }>('/sessions/' + sessionId + '/messages', {
         method: 'POST',
         body: JSON.stringify({ content: trimmed })
       });
       setMessages((current) => mergeMessages(current, [result.userMessage, result.assistantMessage]));
+      setState((current) => current ? { ...current, availabilityContext: result.availabilityContext } : current);
     } catch (nextError) {
       setContent(trimmed);
       if (!handleApiError(nextError)) {
@@ -225,6 +272,30 @@ function ChatPage({ sessionId }: { sessionId: string }) {
           </div>
           <button className="btn secondary" onClick={() => fetch(logoutUrl, { method: 'POST', credentials: 'include' }).then(() => location.reload())}>Salir</button>
         </header>
+
+        <section className="availabilityPanel">
+          <div className="availabilityPanelHeader">
+            <div>
+              <p className="eyebrow">Disponibilidad</p>
+              <h2>Estado de participantes</h2>
+            </div>
+            <p className="candidateSummary">
+              {state?.availabilityContext.candidate?.summary ?? 'Sin día candidato todavía.'}
+            </p>
+          </div>
+          <div className="availabilityList">
+            {availabilityItems.map((item) => (
+              <article key={item.googleId} className="availabilityItem">
+                <span className={`trafficLight ${item.status}`} title={statusLabel(item.status)} />
+                <div>
+                  <strong>{item.name}</strong>
+                  <p>{item.summary || 'Todavía no indicó disponibilidad.'}</p>
+                  {item.candidateSummary && <small>{item.candidateSummary}</small>}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <div className="messageStream">
           {messages.map((message) => (
@@ -257,6 +328,16 @@ function ChatPage({ sessionId }: { sessionId: string }) {
       </section>
     </main>
   );
+}
+
+function statusLabel(status: AvailabilityStatus) {
+  const labels: Record<AvailabilityStatus, string> = {
+    unknown: 'Sin disponibilidad',
+    declined: 'No participa',
+    no_match: 'Sin coincidencia con todos',
+    matched: 'Coincide con todos'
+  };
+  return labels[status];
 }
 
 function mergeMessages(current: ChatMessage[], next: ChatMessage[]) {

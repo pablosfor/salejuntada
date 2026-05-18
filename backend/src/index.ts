@@ -25,6 +25,9 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE chat_sessions
+      ADD COLUMN IF NOT EXISTS availability_context JSONB NOT NULL DEFAULT '{"participants":{},"candidate":null,"updatedAt":null}'::jsonb;
+
     CREATE TABLE IF NOT EXISTS chat_participants (
       id UUID PRIMARY KEY,
       session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
