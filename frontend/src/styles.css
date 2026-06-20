@@ -1,0 +1,308 @@
+:root {
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: #1d2333;
+  background: #f4f6f8;
+  --panel: #ffffff;
+  --line: #d9e0ea;
+  --primary: #276ef1;
+  --primary-deep: #174ea6;
+  --soft: #657386;
+  --danger: #b42318;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button, textarea { font: inherit; }
+
+.pageShell,
+.chatShell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel,
+.chatWindow {
+  width: min(960px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(32, 42, 62, 0.08);
+}
+
+.panel {
+  display: grid;
+  gap: 22px;
+  padding: 28px;
+}
+
+.homePanel {
+  max-width: 680px;
+}
+
+.homeActions {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+.chatWindow {
+  height: min(860px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  overflow: hidden;
+}
+
+.chatHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+h1, p { margin: 0; }
+h1 {
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.eyebrow {
+  margin-bottom: 4px;
+  color: var(--primary-deep);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.lede,
+.shareLink,
+.candidateSummary {
+  color: var(--soft);
+  line-height: 1.45;
+}
+
+.btn {
+  min-height: 42px;
+  border: 0;
+  border-radius: 7px;
+  padding: 10px 15px;
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn.secondary {
+  background: #eef3fb;
+  color: #21324a;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.availabilityPanel {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.availabilityPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.availabilityPanel h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.candidateSummary {
+  max-width: 440px;
+  text-align: right;
+  font-size: 0.9rem;
+}
+
+.availabilityList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.availabilityItem {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+  min-width: 0;
+}
+
+.availabilityItem strong,
+.availabilityItem p,
+.availabilityItem small {
+  display: block;
+}
+
+.availabilityItem p,
+.availabilityItem small {
+  margin-top: 3px;
+  color: var(--soft);
+  line-height: 1.35;
+}
+
+.availabilityItem small {
+  color: #276749;
+}
+
+.trafficLight {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  margin-top: 4px;
+  background: #a0a8b4;
+  box-shadow: 0 0 0 3px rgba(160, 168, 180, 0.18);
+}
+
+.trafficLight.declined {
+  background: #d92d20;
+  box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.16);
+}
+
+.trafficLight.no_match {
+  background: #fdb022;
+  box-shadow: 0 0 0 3px rgba(253, 176, 34, 0.18);
+}
+
+.trafficLight.matched {
+  background: #12b76a;
+  box-shadow: 0 0 0 3px rgba(18, 183, 106, 0.18);
+}
+
+.messageStream {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f8fafc;
+}
+
+.messageBubble {
+  width: min(720px, 88%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: white;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.messageBubble.user {
+  align-self: flex-end;
+  border-color: #bfd0f7;
+  background: #eef4ff;
+}
+
+.messageBubble.assistant {
+  align-self: flex-start;
+}
+
+.messageBubble.pending {
+  color: var(--soft);
+}
+
+.messageMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--soft);
+  font-size: 0.82rem;
+}
+
+.messageMeta strong {
+  color: #263247;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 16px;
+  border-top: 1px solid var(--line);
+  background: white;
+}
+
+textarea {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 11px 12px;
+  line-height: 1.4;
+}
+
+textarea:focus {
+  border-color: var(--primary);
+  outline: 3px solid rgba(39, 110, 241, 0.16);
+}
+
+.errorText {
+  color: var(--danger);
+  padding: 0 16px 12px;
+}
+
+.panel .errorText {
+  padding: 0;
+}
+
+@media (max-width: 640px) {
+  .pageShell,
+  .chatShell {
+    padding: 10px;
+  }
+
+  .chatWindow {
+    height: calc(100vh - 20px);
+  }
+
+  .chatHeader,
+  .availabilityPanelHeader,
+  .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .chatHeader,
+  .availabilityPanelHeader {
+    flex-direction: column;
+  }
+
+  .candidateSummary {
+    max-width: none;
+    text-align: left;
+  }
+
+  .messageBubble {
+    width: 100%;
+  }
+
+  .composer {
+    display: flex;
+    flex-direction: column;
+  }
+}

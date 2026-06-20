@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: salejuntada
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: 4000
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost:5173}
+      SESSION_SECRET: super-secret
+      DATABASE_URL: postgres://postgres:postgres@db:5432/salejuntada
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${PUBLIC_URL:-http://localhost:5173}/auth/google/callback
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      - db
+    volumes:
+      - ./backend/src:/app/src
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_URL: /api
+      VITE_BACKEND_URL: ""
+    depends_on:
+      - backend
+    ports:
+      - "${PUBLIC_FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/src
+
+volumes:
+  db_data:

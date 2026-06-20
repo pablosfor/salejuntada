@@ -1,0 +1,9 @@
+{
+  "name": "salejuntada",
+  "private": true,
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "test": "npm run -w backend test && npm run -w frontend test",
+    "build": "npm run -w backend build && npm run -w frontend build"
+  }
+}
